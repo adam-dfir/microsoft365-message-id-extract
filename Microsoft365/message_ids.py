@@ -19,30 +19,38 @@ class MessageIds(Authentication):
                 System.output("S","Exported Message Content and Attachments for "+message['subject'])
             messages.append(message)
         self.export_metadata(messages,export_dir)
-    def get_message(self,messageId,user_id):
-        _t=requests.get(f"https://graph.microsoft.com/v1.0/users/{user_id}/messages?$filter=internetMessageId eq '{messageId}'",headers=self.headers)
-        if _t.status_code==200:
-            data = json.loads(_t.text)
-            if not data['value']:
-                System.output("E", f"Could not find message with ID: {messageId}")
-                return None
-            message=data['value'][0]
-            _r={}
-            for field in message:
-                if field == "sender" or field == "from":
-                    _r[field]=message[field]['emailAddress']['address']
-                elif field == "toRecipients" or field == "ccRecipients" or field == "bccRecipients" or field == "replyTo":
-                    _t1=[]
-                    for _ in message[field]:
-                        _t1.append(_['emailAddress']['address'])
-                    _r[field]=";".join(_t1)
-                else:
-                    _r[field]=message[field]
-            System.output("I","Found Email "+message['subject'])
-            return _r
-        else:
-            System.output("E", f"Error fetching message ID {messageId}. Status: {_t.status_code}, Response: {_t.text}")
-            return None
+    def _process_message(self, message):
+        _r = {}
+        for field in message:
+            if field == "sender" or field == "from":
+                _r[field] = message[field]['emailAddress']['address']
+            elif field == "toRecipients" or field == "ccRecipients" or field == "bccRecipients" or field == "replyTo":
+                _t1 = []
+                for _ in message[field]:
+                    _t1.append(_['emailAddress']['address'])
+                _r[field] = ";".join(_t1)
+            else:
+                _r[field] = message[field]
+        System.output("I", "Found Email " + message['subject'])
+        return _r
+    def get_message(self, messageId, user_id):
+        endpoints = [
+            f"https://graph.microsoft.com/v1.0/users/{user_id}/messages?$filter=internetMessageId eq '{messageId}'",
+            f"https://graph.microsoft.com/v1.0/users/{user_id}/mailFolders/deleteditems/messages?$filter=internetMessageId eq '{messageId}'",
+            f"https://graph.microsoft.com/v1.0/users/{user_id}/mailFolders/drafts/messages?$filter=internetMessageId eq '{messageId}'"
+        ]
+
+        for url in endpoints:
+            _t = requests.get(url, headers=self.headers)
+            
+            if _t.status_code == 200:
+                data = json.loads(_t.text)
+                if data['value']:
+                    return self._process_message(data['value'][0])
+            else:
+                System.output("E", f"API error checking {url}. Status: {_t.status_code}. Skipping folder.")
+        System.output("E", f"Could not find message with ID: {messageId} in main folders, deleted items, or drafts.")
+        return None
     def export_attachments(self,id,user_id,output_directory):
         _t=requests.get(f"https://graph.microsoft.com/v1.0/users/{user_id}/messages/{id}/attachments",headers=self.headers)
         if _t.status_code==200:
@@ -65,4 +73,5 @@ class MessageIds(Authentication):
             _w.writerows(_data)
 
         System.output("S","Exported Message Metadata")
+
 
