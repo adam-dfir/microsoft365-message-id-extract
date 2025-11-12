@@ -8,6 +8,8 @@ class MessageIds(Authentication):
         messages=[]
         for messageId in message_ids:
             message=self.get_message(messageId,user_id)
+            if not message:
+                continue
             _id=str(uuid.uuid4())
             abs_path=export_dir+"/"+re.sub(r"[/\\?%*:|\"<>\x7F\x00-\x1F]", "-", message['subject'])+" - "+_id
             mkdir(abs_path)
@@ -63,3 +65,4 @@ class MessageIds(Authentication):
             _w.writerows(_data)
 
         System.output("S","Exported Message Metadata")
+
