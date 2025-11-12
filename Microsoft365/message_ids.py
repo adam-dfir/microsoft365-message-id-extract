@@ -20,7 +20,11 @@ class MessageIds(Authentication):
     def get_message(self,messageId,user_id):
         _t=requests.get(f"https://graph.microsoft.com/v1.0/users/{user_id}/messages?$filter=internetMessageId eq '{messageId}'",headers=self.headers)
         if _t.status_code==200:
-            message=json.loads(_t.text)['value'][0]
+            data = json.loads(_t.text)
+            if not data['value']:
+                System.output("E", f"Could not find message with ID: {messageId}")
+                return None
+            message=data['value'][0]
             _r={}
             for field in message:
                 if field == "sender" or field == "from":
@@ -34,6 +38,9 @@ class MessageIds(Authentication):
                     _r[field]=message[field]
             System.output("I","Found Email "+message['subject'])
             return _r
+        else:
+            System.output("E", f"Error fetching message ID {messageId}. Status: {_t.status_code}, Response: {_t.text}")
+            return None
     def export_attachments(self,id,user_id,output_directory):
         _t=requests.get(f"https://graph.microsoft.com/v1.0/users/{user_id}/messages/{id}/attachments",headers=self.headers)
         if _t.status_code==200:
@@ -54,4 +61,5 @@ class MessageIds(Authentication):
             _w=csv.DictWriter(csvFile,fieldnames=_keys,delimiter=",")
             _w.writeheader()
             _w.writerows(_data)
+
         System.output("S","Exported Message Metadata")
